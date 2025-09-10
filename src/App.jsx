@@ -89,7 +89,7 @@ function App() {
       ...sandbag,
       x: sandbag.x + sandbag.vx,
       y: sandbag.y + sandbag.vy,
-      vy: sandbag.vy + 0.3 // 重力
+      vy: sandbag.vy + 0.2 // 减小重力效果
     })).filter(sandbag => 
       sandbag.x > -SANDBAG_SIZE && 
       sandbag.x < GAME_WIDTH + SANDBAG_SIZE && 
@@ -200,9 +200,25 @@ function App() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT)
 
     if (gameState === 'playing') {
-      // 绘制背景
+      // 绘制地面背景
+      // 天空部分（上半部分）
+      const skyHeight = GAME_HEIGHT * 0.3
       ctx.fillStyle = '#87CEEB'
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT)
+      ctx.fillRect(0, 0, GAME_WIDTH, skyHeight)
+      
+      // 地面部分（下半部分）
+      ctx.fillStyle = '#8B7355' // 棕色土地
+      ctx.fillRect(0, skyHeight, GAME_WIDTH, GAME_HEIGHT - skyHeight)
+      
+      // 草地纹理
+      ctx.fillStyle = '#228B22'
+      for (let x = 0; x < GAME_WIDTH; x += 20) {
+        for (let y = skyHeight; y < skyHeight + 30; y += 5) {
+          if (Math.random() > 0.7) {
+            ctx.fillRect(x + Math.random() * 15, y, 2, 8)
+          }
+        }
+      }
 
       // 绘制玩家
       ctx.fillStyle = '#4169E1'
@@ -276,19 +292,28 @@ function App() {
     
     setIsDragging(false)
     
-    // 计算投掷力度和方向
-    const dx = dragEnd.x - dragStart.x
-    const dy = dragEnd.y - dragStart.y
-    const power = Math.min(Math.sqrt(dx * dx + dy * dy) / 10, 15)
+    // 计算从玩家位置到鼠标位置的方向和力度
+    const playerCenterX = player.x + PLAYER_SIZE / 2
+    const playerCenterY = player.y + PLAYER_SIZE / 2
     
-    if (power > 2) {
-      const angle = Math.atan2(dy, dx)
-      const vx = Math.cos(angle) * power
-      const vy = Math.sin(angle) * power
+    const dx = dragEnd.x - playerCenterX
+    const dy = dragEnd.y - playerCenterY
+    const distance = Math.sqrt(dx * dx + dy * dy)
+    
+    if (distance > 20) { // 最小拖拽距离
+      // 归一化方向向量
+      const normalizedDx = dx / distance
+      const normalizedDy = dy / distance
+      
+      // 计算力度（基于拖拽距离，但有上限）
+      const power = Math.min(distance / 15, 12)
+      
+      const vx = normalizedDx * power
+      const vy = normalizedDy * power
       
       setSandbags(prev => [...prev, {
-        x: player.x + PLAYER_SIZE / 2,
-        y: player.y + PLAYER_SIZE / 2,
+        x: playerCenterX,
+        y: playerCenterY,
         vx,
         vy,
         id: Date.now()
