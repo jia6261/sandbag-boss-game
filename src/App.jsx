@@ -200,24 +200,26 @@ function App() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT)
 
     if (gameState === 'playing') {
-      // 绘制地面背景
-      // 天空部分（上半部分）
-      const skyHeight = GAME_HEIGHT * 0.3
-      ctx.fillStyle = '#87CEEB'
-      ctx.fillRect(0, 0, GAME_WIDTH, skyHeight)
-      
-      // 地面部分（下半部分）
+      // 绘制地面背景（整个区域）
       ctx.fillStyle = '#8B7355' // 棕色土地
-      ctx.fillRect(0, skyHeight, GAME_WIDTH, GAME_HEIGHT - skyHeight)
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT)
       
-      // 草地纹理
+      // 添加草地纹理遍布整个区域
       ctx.fillStyle = '#228B22'
-      for (let x = 0; x < GAME_WIDTH; x += 20) {
-        for (let y = skyHeight; y < skyHeight + 30; y += 5) {
-          if (Math.random() > 0.7) {
-            ctx.fillRect(x + Math.random() * 15, y, 2, 8)
+      for (let x = 0; x < GAME_WIDTH; x += 25) {
+        for (let y = 0; y < GAME_HEIGHT; y += 25) {
+          if (Math.random() > 0.6) {
+            ctx.fillRect(x + Math.random() * 20, y + Math.random() * 20, 3, 10)
           }
         }
+      }
+      
+      // 添加一些土地纹理点
+      ctx.fillStyle = '#654321'
+      for (let i = 0; i < 50; i++) {
+        const x = Math.random() * GAME_WIDTH
+        const y = Math.random() * GAME_HEIGHT
+        ctx.fillRect(x, y, 2, 2)
       }
 
       // 绘制玩家
