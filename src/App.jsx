@@ -21,14 +21,17 @@ function App() {
 
   // 游戏对象状态
   const [player, setPlayer] = useState({ x: 50, y: GAME_HEIGHT - 80 }) // 玩家在左侧地面上
-  const [boss, setBoss] = useState({ 
+  const [enemies, setEnemies] = useState([{ 
+    id: 1,
     x: GAME_WIDTH - 150, 
-    y: GAME_HEIGHT - 120, // Boss也在地面上
+    y: GAME_HEIGHT - 120, // 敌人在地面上
     vx: 1, 
     vy: 0.5, // 减小移动速度
     attackTimer: 0,
-    isAttacking: false
-  })
+    isAttacking: false,
+    health: 300
+  }])
+  const [gameTimer, setGameTimer] = useState(0) // 游戏计时器
   const [sandbags, setSandbags] = useState([])
   const [bossProjectiles, setBossProjectiles] = useState([])
   const [particles, setParticles] = useState([])
@@ -37,14 +40,31 @@ function App() {
   const gameLoop = useCallback(() => {
     if (gameState !== 'playing') return
 
-    // 更新Boss位置
-    setBoss(prev => {
-      let newX = prev.x + prev.vx
-      let newY = prev.y + prev.vy
-      let newVx = prev.vx
-      let newVy = prev.vy
+    // 更新游戏计时器
+    setGameTimer(prev => prev + 1)
 
-      // Boss边界检测（限制在地面区域）
+    // 每10秒（600帧）生成一个新敌人
+    if (gameTimer > 0 && gameTimer % 600 === 0) {
+      setEnemies(prev => [...prev, {
+        id: Date.now(),
+        x: GAME_WIDTH - 100 - Math.random() * 200, // 随机位置
+        y: GAME_HEIGHT - 120 - Math.random() * 50,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 1,
+        attackTimer: Math.random() * 60, // 随机攻击时机
+        isAttacking: false,
+        health: 300
+      }])
+    }
+
+    // 更新所有敌人位置
+    setEnemies(prev => prev.map(enemy => {
+      let newX = enemy.x + enemy.vx
+      let newY = enemy.y + enemy.vy
+      let newVx = enemy.vx
+      let newVy = enemy.vy
+
+      // 敌人边界检测（限制在地面区域）
       if (newX <= 0 || newX >= GAME_WIDTH - BOSS_SIZE) {
         newVx = -newVx
       }
@@ -52,9 +72,9 @@ function App() {
         newVy = -newVy
       }
 
-      // Boss攻击逻辑
-      let attackTimer = prev.attackTimer + 1
-      let isAttacking = prev.isAttacking
+      // 敌人攻击逻辑
+      let attackTimer = enemy.attackTimer + 1
+      let isAttacking = enemy.isAttacking
 
       if (attackTimer > 120 && !isAttacking) { // 每2秒攻击一次
         isAttacking = true
@@ -66,7 +86,7 @@ function App() {
           y: newY + BOSS_SIZE,
           vx: (Math.random() - 0.5) * 4,
           vy: 3,
-          id: Date.now()
+          id: Date.now() + Math.random()
         }])
       }
 
@@ -75,6 +95,7 @@ function App() {
       }
 
       return {
+        ...enemy,
         x: newX,
         y: newY,
         vx: newVx,
@@ -82,7 +103,7 @@ function App() {
         attackTimer,
         isAttacking
       }
-    })
+    }))
 
     // 更新沙包位置
     setSandbags(prev => prev.map(sandbag => {
@@ -127,29 +148,44 @@ function App() {
       projectile.y < GAME_HEIGHT + 20
     ))
 
-    // 碰撞检测 - 沙包击中Boss
+    // 碰撞检测 - 沙包击中敌人
     setSandbags(prev => {
       const remainingSandbags = []
       prev.forEach(sandbag => {
-        const hitBoss = sandbag.x < boss.x + BOSS_SIZE &&
-                      sandbag.x + SANDBAG_SIZE > boss.x &&
-                      sandbag.y < boss.y + BOSS_SIZE &&
-                      sandbag.y + SANDBAG_SIZE > boss.y
+        let hitEnemy = false
+        
+        setEnemies(enemies => enemies.map(enemy => {
+          const hit = sandbag.x < enemy.x + BOSS_SIZE &&
+                     sandbag.x + SANDBAG_SIZE > enemy.x &&
+                     sandbag.y < enemy.y + BOSS_SIZE &&
+                     sandbag.y + SANDBAG_SIZE > enemy.y
 
-        if (hitBoss) {
-          setBossHealth(health => Math.max(0, health - 20))
-          setScore(score => score + 100)
-          
-          // 添加击中特效
-          setParticles(particles => [...particles, {
-            x: sandbag.x,
-            y: sandbag.y,
-            vx: (Math.random() - 0.5) * 4,
-            vy: (Math.random() - 0.5) * 4,
-            life: 30,
-            id: Date.now() + Math.random()
-          }])
-        } else {
+          if (hit && !hitEnemy) {
+            hitEnemy = true
+            setScore(score => score + 100)
+            
+            // 添加击中特效
+            setParticles(particles => [...particles, {
+              x: sandbag.x,
+              y: sandbag.y,
+              vx: (Math.random() - 0.5) * 4,
+              vy: (Math.random() - 0.5) * 4,
+              life: 30,
+              id: Date.now() + Math.random()
+            }])
+            
+            // 减少敌人血量
+            const newHealth = enemy.health - 20
+            if (newHealth <= 0) {
+              setScore(score => score + 500) // 击败敌人额外奖励
+              return null // 标记为删除
+            }
+            return { ...enemy, health: newHealth }
+          }
+          return enemy
+        }).filter(enemy => enemy !== null)) // 移除被击败的敌人
+
+        if (!hitEnemy) {
           remainingSandbags.push(sandbag)
         }
       })
@@ -182,16 +218,16 @@ function App() {
       life: particle.life - 1
     })).filter(particle => particle.life > 0))
 
-  }, [gameState, boss, player])
+  }, [gameState, enemies, player, gameTimer])
 
   // 检查游戏结束条件
   useEffect(() => {
-    if (bossHealth <= 0) {
+    if (enemies.length === 0 && gameTimer > 60) { // 如果所有敌人都被击败
       setGameState('victory')
     } else if (playerHealth <= 0) {
       setGameState('defeat')
     }
-  }, [bossHealth, playerHealth])
+  }, [enemies, playerHealth, gameTimer])
 
   // 游戏循环
   useEffect(() => {
@@ -257,21 +293,36 @@ function App() {
       ctx.fillRect(player.x - 8, player.y + 10, 15, 8)
       ctx.fillRect(player.x + PLAYER_SIZE - 7, player.y + 10, 15, 8)
 
-      // 绘制Boss（向前看的角色）
-      ctx.fillStyle = boss.isAttacking ? '#FF4500' : '#DC143C'
-      // Boss身体
-      ctx.fillRect(boss.x, boss.y, BOSS_SIZE, BOSS_SIZE)
-      // Boss头部（向前看）
-      ctx.fillStyle = '#8B0000'
-      ctx.fillRect(boss.x + 10, boss.y - 20, BOSS_SIZE - 20, 20)
-      // Boss眼睛（红色，表示愤怒）
-      ctx.fillStyle = '#FF0000'
-      ctx.fillRect(boss.x + 15, boss.y - 15, 5, 5)
-      ctx.fillRect(boss.x + 25, boss.y - 15, 5, 5)
-      // Boss手臂
-      ctx.fillStyle = '#8B0000'
-      ctx.fillRect(boss.x - 15, boss.y + 20, 20, 12)
-      ctx.fillRect(boss.x + BOSS_SIZE - 5, boss.y + 20, 20, 12)
+      // 绘制所有敌人（向前看的角色）
+      enemies.forEach(enemy => {
+        ctx.fillStyle = enemy.isAttacking ? '#FF4500' : '#DC143C'
+        // 敌人身体
+        ctx.fillRect(enemy.x, enemy.y, BOSS_SIZE, BOSS_SIZE)
+        // 敌人头部（向前看）
+        ctx.fillStyle = '#8B0000'
+        ctx.fillRect(enemy.x + 10, enemy.y - 20, BOSS_SIZE - 20, 20)
+        // 敌人眼睛（红色，表示愤怒）
+        ctx.fillStyle = '#FF0000'
+        ctx.fillRect(enemy.x + 15, enemy.y - 15, 5, 5)
+        ctx.fillRect(enemy.x + 25, enemy.y - 15, 5, 5)
+        // 敌人手臂
+        ctx.fillStyle = '#8B0000'
+        ctx.fillRect(enemy.x - 15, enemy.y + 20, 20, 12)
+        ctx.fillRect(enemy.x + BOSS_SIZE - 5, enemy.y + 20, 20, 12)
+        
+        // 绘制敌人血量条
+        const healthBarWidth = BOSS_SIZE
+        const healthBarHeight = 6
+        const healthPercentage = enemy.health / 300
+        
+        // 血量条背景
+        ctx.fillStyle = '#333333'
+        ctx.fillRect(enemy.x, enemy.y - 30, healthBarWidth, healthBarHeight)
+        
+        // 血量条
+        ctx.fillStyle = healthPercentage > 0.5 ? '#00FF00' : healthPercentage > 0.25 ? '#FFFF00' : '#FF0000'
+        ctx.fillRect(enemy.x, enemy.y - 30, healthBarWidth * healthPercentage, healthBarHeight)
+      })
 
       // 绘制沙包
       ctx.fillStyle = '#8B4513'
@@ -369,19 +420,21 @@ function App() {
   const startGame = () => {
     setGameState('playing')
     setPlayerHealth(100)
-    setBossHealth(300)
     setScore(0)
+    setGameTimer(0)
     setSandbags([])
     setBossProjectiles([])
     setParticles([])
-    setBoss({ 
+    setEnemies([{ 
+      id: 1,
       x: GAME_WIDTH - 150, 
-      y: GAME_HEIGHT - 120, // Boss在地面上
+      y: GAME_HEIGHT - 120, // 敌人在地面上
       vx: 1, 
       vy: 0.5, // 减小移动速度
       attackTimer: 0,
-      isAttacking: false
-    })
+      isAttacking: false,
+      health: 300
+    }])
   }
 
   const resetGame = () => {
@@ -405,8 +458,9 @@ function App() {
         <div className="flex flex-col items-center">
           <div className="flex gap-8 mb-4 text-white">
             <div>玩家血量: {playerHealth}</div>
-            <div>Boss血量: {bossHealth}</div>
+            <div>敌人数量: {enemies.length}</div>
             <div>得分: {score}</div>
+            <div>时间: {Math.floor(gameTimer / 60)}秒</div>
           </div>
           
           <canvas
