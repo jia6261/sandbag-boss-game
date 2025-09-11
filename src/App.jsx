@@ -20,12 +20,12 @@ function App() {
   const [dragEnd, setDragEnd] = useState({ x: 0, y: 0 })
 
   // 游戏对象状态
-  const [player, setPlayer] = useState({ x: 100, y: GAME_HEIGHT - 100 })
+  const [player, setPlayer] = useState({ x: 50, y: GAME_HEIGHT - 80 }) // 玩家在左侧地面上
   const [boss, setBoss] = useState({ 
     x: GAME_WIDTH - 150, 
-    y: 100, 
-    vx: 2, 
-    vy: 1,
+    y: GAME_HEIGHT - 120, // Boss也在地面上
+    vx: 1, 
+    vy: 0.5, // 减小移动速度
     attackTimer: 0,
     isAttacking: false
   })
@@ -44,11 +44,11 @@ function App() {
       let newVx = prev.vx
       let newVy = prev.vy
 
-      // Boss边界检测
+      // Boss边界检测（限制在地面区域）
       if (newX <= 0 || newX >= GAME_WIDTH - BOSS_SIZE) {
         newVx = -newVx
       }
-      if (newY <= 0 || newY >= GAME_HEIGHT - BOSS_SIZE) {
+      if (newY <= GAME_HEIGHT - 200 || newY >= GAME_HEIGHT - BOSS_SIZE) { // 限制在地面附近
         newVy = -newVy
       }
 
@@ -222,13 +222,37 @@ function App() {
         ctx.fillRect(x, y, 2, 2)
       }
 
-      // 绘制玩家
+      // 绘制玩家（向前看的角色）
       ctx.fillStyle = '#4169E1'
+      // 身体
       ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE)
+      // 头部（向前看）
+      ctx.fillStyle = '#FFE4C4'
+      ctx.fillRect(player.x + 5, player.y - 15, PLAYER_SIZE - 10, 15)
+      // 眼睛（表示向前看）
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(player.x + 8, player.y - 10, 3, 3)
+      ctx.fillRect(player.x + 15, player.y - 10, 3, 3)
+      // 手臂（准备投掷姿势）
+      ctx.fillStyle = '#FFE4C4'
+      ctx.fillRect(player.x - 8, player.y + 10, 15, 8)
+      ctx.fillRect(player.x + PLAYER_SIZE - 7, player.y + 10, 15, 8)
 
-      // 绘制Boss
+      // 绘制Boss（向前看的角色）
       ctx.fillStyle = boss.isAttacking ? '#FF4500' : '#DC143C'
+      // Boss身体
       ctx.fillRect(boss.x, boss.y, BOSS_SIZE, BOSS_SIZE)
+      // Boss头部（向前看）
+      ctx.fillStyle = '#8B0000'
+      ctx.fillRect(boss.x + 10, boss.y - 20, BOSS_SIZE - 20, 20)
+      // Boss眼睛（红色，表示愤怒）
+      ctx.fillStyle = '#FF0000'
+      ctx.fillRect(boss.x + 15, boss.y - 15, 5, 5)
+      ctx.fillRect(boss.x + 25, boss.y - 15, 5, 5)
+      // Boss手臂
+      ctx.fillStyle = '#8B0000'
+      ctx.fillRect(boss.x - 15, boss.y + 20, 20, 12)
+      ctx.fillRect(boss.x + BOSS_SIZE - 5, boss.y + 20, 20, 12)
 
       // 绘制沙包
       ctx.fillStyle = '#8B4513'
@@ -333,9 +357,9 @@ function App() {
     setParticles([])
     setBoss({ 
       x: GAME_WIDTH - 150, 
-      y: 100, 
-      vx: 2, 
-      vy: 1,
+      y: GAME_HEIGHT - 120, // Boss在地面上
+      vx: 1, 
+      vy: 0.5, // 减小移动速度
       attackTimer: 0,
       isAttacking: false
     })
