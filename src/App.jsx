@@ -35,6 +35,7 @@ function App() {
   const [sandbags, setSandbags] = useState([])
   const [bossProjectiles, setBossProjectiles] = useState([])
   const [particles, setParticles] = useState([])
+  const [sandbagCooldown, setSandbagCooldown] = useState(0) // 沙包冷却时间
 
   // 游戏循环
   const gameLoop = useCallback(() => {
@@ -42,6 +43,9 @@ function App() {
 
     // 更新游戏计时器
     setGameTimer(prev => prev + 1)
+
+    // 更新沙包冷却时间
+    setSandbagCooldown(prev => Math.max(0, prev - 1))
 
     // 每10秒（600帧）生成一个新敌人
     if (gameTimer > 0 && gameTimer % 600 === 0) {
@@ -218,7 +222,7 @@ function App() {
       life: particle.life - 1
     })).filter(particle => particle.life > 0))
 
-  }, [gameState, enemies, player, gameTimer])
+  }, [gameState, enemies, player, gameTimer, sandbagCooldown])
 
   // 检查游戏结束条件
   useEffect(() => {
@@ -396,7 +400,7 @@ function App() {
     const dy = dragEnd.y - playerCenterY
     const distance = Math.sqrt(dx * dx + dy * dy)
     
-    if (distance > 20) { // 最小拖拽距离
+    if (distance > 20 && sandbagCooldown === 0) { // 最小拖拽距离且无冷却时间
       // 归一化方向向量
       const normalizedDx = dx / distance
       const normalizedDy = dy / distance
@@ -414,6 +418,9 @@ function App() {
         vy,
         id: Date.now()
       }])
+      
+      // 设置冷却时间（2秒 = 120帧）
+      setSandbagCooldown(120)
     }
   }
 
@@ -422,6 +429,7 @@ function App() {
     setPlayerHealth(100)
     setScore(0)
     setGameTimer(0)
+    setSandbagCooldown(0) // 重置冷却时间
     setSandbags([])
     setBossProjectiles([])
     setParticles([])
@@ -461,6 +469,9 @@ function App() {
             <div>敌人数量: {enemies.length}</div>
             <div>得分: {score}</div>
             <div>时间: {Math.floor(gameTimer / 60)}秒</div>
+            <div className={sandbagCooldown > 0 ? 'text-red-400' : 'text-green-400'}>
+              沙包: {sandbagCooldown > 0 ? `冷却中(${Math.ceil(sandbagCooldown / 60)}s)` : '就绪'}
+            </div>
           </div>
           
           <canvas
