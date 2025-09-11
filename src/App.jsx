@@ -85,16 +85,35 @@ function App() {
     })
 
     // 更新沙包位置
-    setSandbags(prev => prev.map(sandbag => ({
-      ...sandbag,
-      x: sandbag.x + sandbag.vx,
-      y: sandbag.y + sandbag.vy,
-      vy: sandbag.vy + 0.2 // 减小重力效果
-    })).filter(sandbag => 
-      sandbag.x > -SANDBAG_SIZE && 
-      sandbag.x < GAME_WIDTH + SANDBAG_SIZE && 
-      sandbag.y < GAME_HEIGHT + SANDBAG_SIZE
-    ))
+    setSandbags(prev => prev.map(sandbag => {
+      // 计算速度衰减（模拟空气阻力/摩擦力）
+      const friction = 0.98 // 摩擦系数，越小减速越快
+      const newVx = sandbag.vx * friction
+      const newVy = sandbag.vy * friction
+      
+      // 当速度很小时，停止移动
+      const minSpeed = 0.1
+      const finalVx = Math.abs(newVx) < minSpeed ? 0 : newVx
+      const finalVy = Math.abs(newVy) < minSpeed ? 0 : newVy
+      
+      return {
+        ...sandbag,
+        x: sandbag.x + finalVx,
+        y: sandbag.y + finalVy,
+        vx: finalVx,
+        vy: finalVy
+      }
+    }).filter(sandbag => {
+      // 移除静止的沙包或超出边界的沙包
+      const isStationary = Math.abs(sandbag.vx) < 0.1 && Math.abs(sandbag.vy) < 0.1
+      const isOutOfBounds = sandbag.x < -SANDBAG_SIZE || 
+                           sandbag.x > GAME_WIDTH + SANDBAG_SIZE || 
+                           sandbag.y < -SANDBAG_SIZE || 
+                           sandbag.y > GAME_HEIGHT + SANDBAG_SIZE
+      
+      // 保留移动中且在边界内的沙包
+      return !isStationary && !isOutOfBounds
+    }))
 
     // 更新Boss投射物
     setBossProjectiles(prev => prev.map(projectile => ({
