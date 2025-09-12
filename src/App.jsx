@@ -36,6 +36,8 @@ function App() {
   const [bossProjectiles, setBossProjectiles] = useState([])
   const [particles, setParticles] = useState([])
   const [sandbagCooldown, setSandbagCooldown] = useState(0) // 沙包冷却时间
+  const [ultimatePoints, setUltimatePoints] = useState(0) // 大招点数
+  const [ultimateCooldown, setUltimateCooldown] = useState(0) // 大招冷却时间
 
   // 游戏循环
   const gameLoop = useCallback(() => {
@@ -46,6 +48,9 @@ function App() {
 
     // 更新沙包冷却时间
     setSandbagCooldown(prev => Math.max(0, prev - 1))
+
+    // 更新大招冷却时间
+    setUltimateCooldown(prev => Math.max(0, prev - 1))
 
     // 每10秒（600帧）生成一个新敌人
     if (gameTimer > 0 && gameTimer % 600 === 0) {
@@ -84,13 +89,19 @@ function App() {
         isAttacking = true
         attackTimer = 0
         
-        // 发射投射物
+        // 发射追踪玩家的投射物
+        const dx = player.x - newX
+        const dy = player.y - newY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const speed = 2
+        
         setBossProjectiles(projectiles => [...projectiles, {
           x: newX + BOSS_SIZE / 2,
           y: newY + BOSS_SIZE,
-          vx: (Math.random() - 0.5) * 4,
-          vy: 3,
-          id: Date.now() + Math.random()
+          vx: (dx / distance) * speed,
+          vy: (dy / distance) * speed,
+          id: Date.now() + Math.random(),
+          isTracking: true // 标记为追踪投掷物
         }])
       }
 
@@ -140,12 +151,36 @@ function App() {
       return !isStationary && !isOutOfBounds
     }))
 
-    // 更新Boss投射物
-    setBossProjectiles(prev => prev.map(projectile => ({
-      ...projectile,
-      x: projectile.x + projectile.vx,
-      y: projectile.y + projectile.vy
-    })).filter(projectile => 
+    // 更新Boss投射物（追踪玩家）
+    setBossProjectiles(prev => prev.map(projectile => {
+      if (projectile.isTracking) {
+        // 计算朝向玩家的方向
+        const dx = player.x - projectile.x
+        const dy = player.y - projectile.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        
+        if (distance > 0) {
+          const speed = 2.5 // 追踪速度
+          const newVx = (dx / distance) * speed
+          const newVy = (dy / distance) * speed
+          
+          return {
+            ...projectile,
+            x: projectile.x + newVx,
+            y: projectile.y + newVy,
+            vx: newVx,
+            vy: newVy
+          }
+        }
+      }
+      
+      // 非追踪投掷物保持原有逻辑
+      return {
+        ...projectile,
+        x: projectile.x + projectile.vx,
+        y: projectile.y + projectile.vy
+      }
+    }).filter(projectile => 
       projectile.x > -20 && 
       projectile.x < GAME_WIDTH + 20 && 
       projectile.y > -20 && 
@@ -167,6 +202,7 @@ function App() {
           if (hit && !hitEnemy) {
             hitEnemy = true
             setScore(score => score + 100)
+            setUltimatePoints(points => points + 1) // 击中敌人获得大招点数
             
             // 添加击中特效
             setParticles(particles => [...particles, {
@@ -182,6 +218,7 @@ function App() {
             const newHealth = enemy.health - 20
             if (newHealth <= 0) {
               setScore(score => score + 500) // 击败敌人额外奖励
+              setUltimatePoints(points => points + 3) // 击败敌人获得更多大招点数
               return null // 标记为删除
             }
             return { ...enemy, health: newHealth }
@@ -190,6 +227,48 @@ function App() {
         }).filter(enemy => enemy !== null)) // 移除被击败的敌人
 
         if (!hitEnemy) {
+          remainingSandbags.push(sandbag)
+        }
+      })
+      return remainingSandbags
+    })
+
+    // 碰撞检测 - 玩家沙包抵挡敌人投掷物
+    setSandbags(prev => {
+      const remainingSandbags = []
+      prev.forEach(sandbag => {
+        let hitProjectile = false
+        
+        setBossProjectiles(projectiles => {
+          const remainingProjectiles = []
+          projectiles.forEach(projectile => {
+            const collision = sandbag.x < projectile.x + 20 &&
+                             sandbag.x + SANDBAG_SIZE > projectile.x &&
+                             sandbag.y < projectile.y + 20 &&
+                             sandbag.y + SANDBAG_SIZE > projectile.y
+
+            if (collision && !hitProjectile) {
+              hitProjectile = true
+              setScore(score => score + 50) // 抵挡奖励
+              setUltimatePoints(points => points + 1) // 抵挡也获得大招点数
+              
+              // 添加抵挡特效
+              setParticles(particles => [...particles, {
+                x: (sandbag.x + projectile.x) / 2,
+                y: (sandbag.y + projectile.y) / 2,
+                vx: (Math.random() - 0.5) * 6,
+                vy: (Math.random() - 0.5) * 6,
+                life: 20,
+                id: Date.now() + Math.random()
+              }])
+            } else {
+              remainingProjectiles.push(projectile)
+            }
+          })
+          return remainingProjectiles
+        })
+
+        if (!hitProjectile) {
           remainingSandbags.push(sandbag)
         }
       })
@@ -222,7 +301,7 @@ function App() {
       life: particle.life - 1
     })).filter(particle => particle.life > 0))
 
-  }, [gameState, enemies, player, gameTimer, sandbagCooldown])
+  }, [gameState, enemies, player, gameTimer, sandbagCooldown, ultimatePoints, ultimateCooldown])
 
   // 检查游戏结束条件
   useEffect(() => {
@@ -430,6 +509,8 @@ function App() {
     setScore(0)
     setGameTimer(0)
     setSandbagCooldown(0) // 重置冷却时间
+    setUltimatePoints(0) // 重置大招点数
+    setUltimateCooldown(0) // 重置大招冷却
     setSandbags([])
     setBossProjectiles([])
     setParticles([])
@@ -443,6 +524,43 @@ function App() {
       isAttacking: false,
       health: 300
     }])
+  }
+
+  // 大招功能：清除所有敌人投掷物并对所有敌人造成伤害
+  const useUltimate = () => {
+    if (ultimatePoints >= 10 && ultimateCooldown === 0) {
+      setUltimatePoints(points => points - 10) // 消耗10点大招点数
+      setUltimateCooldown(600) // 10秒冷却时间
+      
+      // 清除所有敌人投掷物
+      setBossProjectiles([])
+      
+      // 对所有敌人造成大量伤害
+      setEnemies(prev => prev.map(enemy => {
+        const newHealth = enemy.health - 100
+        if (newHealth <= 0) {
+          setScore(score => score + 1000) // 大招击败敌人额外奖励
+          return null
+        }
+        return { ...enemy, health: newHealth }
+      }).filter(enemy => enemy !== null))
+      
+      // 添加大招特效
+      setParticles(particles => {
+        const newParticles = []
+        for (let i = 0; i < 50; i++) {
+          newParticles.push({
+            x: Math.random() * GAME_WIDTH,
+            y: Math.random() * GAME_HEIGHT,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 60,
+            id: Date.now() + Math.random() + i
+          })
+        }
+        return [...particles, ...newParticles]
+      })
+    }
   }
 
   const resetGame = () => {
@@ -472,6 +590,20 @@ function App() {
             <div className={sandbagCooldown > 0 ? 'text-red-400' : 'text-green-400'}>
               沙包: {sandbagCooldown > 0 ? `冷却中(${Math.ceil(sandbagCooldown / 60)}s)` : '就绪'}
             </div>
+            <div className={ultimatePoints >= 10 ? 'text-yellow-400' : 'text-gray-400'}>
+              大招点数: {ultimatePoints}/10
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <Button 
+              onClick={useUltimate} 
+              disabled={ultimatePoints < 10 || ultimateCooldown > 0}
+              className={`px-6 py-2 ${ultimatePoints >= 10 && ultimateCooldown === 0 ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gray-600'}`}
+            >
+              {ultimateCooldown > 0 ? `大招冷却中(${Math.ceil(ultimateCooldown / 60)}s)` : 
+               ultimatePoints >= 10 ? '释放大招' : `大招(${ultimatePoints}/10)`}
+            </Button>
           </div>
           
           <canvas
